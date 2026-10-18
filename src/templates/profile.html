@@ -177,13 +177,13 @@
       {{ App.Session.get('csrf')|csrf }}
       <div class='d-flex'>
         <div>
-          <input id='importFileInput' hidden required name='file' type='file' accept='.eln,vnd.eln+zip,.csv,text/csv' aria-label='{{ 'Import'|trans }}' />
+          <input id='importFileInput' hidden required multiple name='file' type='file' accept='.eln,vnd.eln+zip,.csv,text/csv' aria-label='{{ 'Import'|trans }}' />
           <div class='mb-4 d-flex flex-row'>
             <button type='button' class='btn btn-primary' data-action='show-file-input' >{{ 'Import from file'|trans }}</button>
           </div>
           <div class='mb-4' id='attachedFile' hidden>
             {{ 'Attached file'|trans }} :
-            <span id='fileName' class='font-weight-bold'></span>
+            <span id='fileName' class='font-weight-bold text-break'></span>
           </div>
           <p class='smallgray'>{{ 'Allowed extensions: .eln, .csv'|trans }}<br>
           {{ 'Maximum size: %s'|format(maxUploadSizeRaw)|trans }}</p>

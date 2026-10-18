@@ -24,4 +24,16 @@ describe('Import tab on profile page', () => {
     cy.get('#importFileBtn').click();
     cy.get('.overlay').first().should('be.visible').should('contain', 'File imported successfully');
   });
+
+  it('can import multiple eln files', () => {
+    cy.visit('/profile.php?tab=3');
+    cy.get('[data-action="show-file-input"]').should('exist').click();
+    cy.get('#importFileInput').should('exist').selectFile([
+      'tests/_data/single-experiment.eln',
+      'tests/_data/version-106.eln',
+    ], { force: true });
+    cy.get('#fileName').should('be.visible').and('contain', 'single-experiment.eln').and('contain', 'version-106.eln');
+    cy.get('#importFileBtn').should('exist').click();
+    cy.get('.overlay').first().should('be.visible').should('contain', 'File imported successfully');
+  });
 });
