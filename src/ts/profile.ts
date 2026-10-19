@@ -81,39 +81,23 @@ if (window.location.pathname === '/profile.php') {
     attachedFile.removeAttribute('hidden');
     const input = event.target as HTMLInputElement;
     const files = Array.from(input.files ?? []);
-    if (files.length === 0) {
-      return;
-    }
-    // display the selected file name(s) on screen
-    const fileName = files.length === 1 ? files[0].name : files.map(f => f.name).join(', ');
+    // display the selected file name on screen
+    const fileName = files.map(f => f.name).join(', ');
     const fileNameDiv = document.getElementById('fileName');
-    if (fileNameDiv) {
-      fileNameDiv.textContent = fileName;
-      fileNameDiv.title = files.map(f => f.name).join('\n');
-      // make sure previous error message is removed first
-      fileNameDiv.classList.remove('alert-danger', 'm-2', 'p-2', 'rounded', 'border');
-    }
+    fileNameDiv.textContent = fileName;
+    // make sure previous error message is removed first
+    fileNameDiv.classList.remove('alert-danger', 'm-2', 'p-2', 'rounded', 'border');
     // when the file is selected, validate the file size before showing options or proceeding
     const maxsize = await ApiC.getJson('import').then(json => json.max_filesize);
-    const oversizedFiles = files.filter(f => f.size > maxsize);
-    if (oversizedFiles.length > 0) {
+    if (files.some(f => f.size > maxsize)) {
       notify.error('file-too-large');
-      fileNameDiv?.classList.add('alert-danger', 'm-2', 'p-2', 'rounded', 'border');
+      fileNameDiv.classList.add('alert-danger', 'm-2', 'p-2', 'rounded', 'border');
       importOptionsDiv.setAttribute('hidden', 'hidden');
       return;
     }
-
-    const isEln = files.every(f => f.name.endsWith('.eln'));
-    const isCsv = files.every(f => f.name.endsWith('.csv'));
-    if (!isEln && !isCsv) {
-      notify.error('Please select only .eln files or only .csv files');
-      fileNameDiv?.classList.add('alert-danger', 'm-2', 'p-2', 'rounded', 'border');
-      importOptionsDiv.setAttribute('hidden', 'hidden');
-      return;
-    }
-
     importOptionsDiv.removeAttribute('hidden');
     // toggle the eln/csv options depending on file extension
+    const isEln = files.every(f => f.name.endsWith('.eln'));
     document.querySelectorAll('[data-showif="eln"]')
       .forEach((el: HTMLElement) => isEln ? el.removeAttribute('hidden') : el.hidden = true);
     // we want to let the .eln file decide which kind of entry it is by default
@@ -166,90 +150,43 @@ if (window.location.pathname === '/profile.php') {
     event.preventDefault();
     // start by making sure the result div is empty
     const resultDiv = document.getElementById('importResultDiv');
-    if (resultDiv) {
-      resultDiv.innerHTML = '';
-    }
-
-    const input = document.getElementById('importFileInput') as HTMLInputElement;
-    const files = Array.from(input?.files ?? []);
-    if (files.length === 0) {
-      return;
-    }
-
+    resultDiv.innerHTML = '';
     // disable the submit button and show "please wait"
     const submitBtn = document.getElementById('importFileBtn') as HTMLButtonElement;
     submitBtn.disabled = true;
     const originalBtnContent = submitBtn.textContent;
     submitBtn.textContent = i18next.t('please-wait');
-
     // now submit the form
     const form = event.target as HTMLFormElement;
-
-    const buildFormDataForFile = (file: File): FormData => {
-      const formData = new FormData(form);
-      formData.delete('file');
-      formData.set('file', file);
-      // prevent the browser from redirecting us
-      formData.set('extraParam', 'noRedirect');
-      if (!formData.get('entity_type')) {
-        formData.delete('entity_type');
-      }
-      if (!formData.get('category')) {
-        formData.delete('category');
-      }
-      if (!formData.get('template')) {
-        formData.delete('template');
-      }
-      return formData;
-    };
-
+    const formData = new FormData(form);
+    // prevent the browser from redirecting us
+    formData.set('extraParam', 'noRedirect');
+    if (!formData.get('entity_type')) {
+      formData.delete('entity_type');
+    }
+    if (!formData.get('category')) {
+      formData.delete('category');
+    }
+    if (!formData.get('template')) {
+      formData.delete('template');
+    }
+    const files = (document.getElementById('importFileInput') as HTMLInputElement).files ?? [];
     try {
-      if (files.length === 1) {
+      for (let i = 0; i < files.length; i++) {
+        formData.set('file', files[i]);
+        if (files.length > 1) {
+          submitBtn.textContent = `${i18next.t('please-wait')} (${i + 1}/${files.length})`;
+        }
         const response = await fetch(form.action, {
           method: 'POST',
-          body: buildFormDataForFile(files[0]),
+          body: formData,
         });
-        if (response.status === 201) {
-          notify.success('file-imported');
-        } else {
-          const error = await response.json();
-          notify.error(error.message);
-        }
-      } else {
-        let successCount = 0;
-        const errors: string[] = [];
-
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          submitBtn.textContent = `${i18next.t('please-wait')} (${i + 1}/${files.length})`;
-          try {
-            const response = await fetch(form.action, {
-              method: 'POST',
-              body: buildFormDataForFile(file),
-            });
-            if (response.status === 201) {
-              successCount++;
-            } else {
-              const error = await response.json().catch(() => ({ message: `HTTP ${response.status}` }));
-              errors.push(`${file.name}: ${error.message}`);
-            }
-          } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            errors.push(`${file.name}: ${message}`);
-          }
-        }
-
-        if (errors.length === 0) {
-          notify.success(files.length > 1 ? `${files.length} ${i18next.t('file-imported')}` : 'file-imported');
-        } else {
-          for (const err of errors) {
-            notify.error(err);
-          }
-          if (successCount > 0) {
-            notify.success(`${successCount}/${files.length} ${i18next.t('file-imported')}`);
-          }
+        if (response.status !== 201) {
+          const error = await response.json().catch(() => ({ message: response.statusText }));
+          throw new Error(error.message);
         }
       }
+      notify.success('file-imported');
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       notify.error(`Import error: ${message}`);
