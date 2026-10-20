@@ -95,9 +95,17 @@ if (window.location.pathname === '/profile.php') {
       importOptionsDiv.setAttribute('hidden', 'hidden');
       return;
     }
+    // ensure all selected files are either all .eln or all .csv (mixed types not supported)
+    const isEln = files.every(f => f.name.endsWith('.eln'));
+    const isCsv = files.every(f => f.name.endsWith('.csv'));
+    if (!isEln && !isCsv) {
+      notify.error('Please select only .eln files or only .csv files');
+      fileNameDiv.classList.add('alert-danger', 'm-2', 'p-2', 'rounded', 'border');
+      importOptionsDiv.setAttribute('hidden', 'hidden');
+      return;
+    }
     importOptionsDiv.removeAttribute('hidden');
     // toggle the eln/csv options depending on file extension
-    const isEln = files.every(f => f.name.endsWith('.eln'));
     document.querySelectorAll('[data-showif="eln"]')
       .forEach((el: HTMLElement) => isEln ? el.removeAttribute('hidden') : el.hidden = true);
     // we want to let the .eln file decide which kind of entry it is by default
@@ -172,6 +180,7 @@ if (window.location.pathname === '/profile.php') {
     }
     const files = (document.getElementById('importFileInput') as HTMLInputElement).files ?? [];
     try {
+      // upload files sequentially to avoid PHP post_max_size and timeout limits
       for (let i = 0; i < files.length; i++) {
         formData.set('file', files[i]);
         if (files.length > 1) {
