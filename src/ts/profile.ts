@@ -91,7 +91,7 @@ if (window.location.pathname === '/profile.php') {
     const maxsize = await ApiC.getJson('import').then(json => json.max_filesize);
     if (files.some(f => f.size > maxsize)) {
       notify.error('file-too-large');
-      fileNameDiv.classList.add('alert-danger', 'm-2', 'p-2', 'rounded', 'border');
+      fileNameDiv.classList.add('alert-danger', 'p-2', 'rounded', 'border');
       importOptionsDiv.setAttribute('hidden', 'hidden');
       return;
     }
@@ -99,7 +99,7 @@ if (window.location.pathname === '/profile.php') {
     const isEln = files[0].name.endsWith('.eln');
     if (!files.every(f => f.name.endsWith(isEln ? '.eln' : '.csv'))) {
       notify.error('Cannot mix .eln and .csv files.');
-      fileNameDiv.classList.add('alert-danger', 'm-2', 'p-2', 'rounded', 'border');
+      fileNameDiv.classList.add('alert-danger', 'p-2', 'rounded', 'border');
       importOptionsDiv.setAttribute('hidden', 'hidden');
       return;
     }
