@@ -99,7 +99,7 @@ if (window.location.pathname === '/profile.php') {
     const isEln = files.every(f => f.name.endsWith('.eln'));
     const isCsv = files.every(f => f.name.endsWith('.csv'));
     if (!isEln && !isCsv) {
-      notify.error('Please select only .eln files or only .csv files');
+      notify.error('Cannot mix .eln and .csv files.');
       fileNameDiv.classList.add('alert-danger', 'm-2', 'p-2', 'rounded', 'border');
       importOptionsDiv.setAttribute('hidden', 'hidden');
       return;

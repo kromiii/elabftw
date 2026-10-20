@@ -36,4 +36,15 @@ describe('Import tab on profile page', () => {
     cy.get('#importFileBtn').should('exist').click();
     cy.get('.overlay').first().should('be.visible').should('contain', 'File imported successfully');
   });
+
+  it('rejects mixing .eln and .csv files', () => {
+    cy.visit('/profile.php?tab=3');
+    cy.get('[data-action="show-file-input"]').should('exist').click();
+    cy.get('#importFileInput').should('exist').selectFile([
+      'tests/_data/single-experiment.eln',
+      'tests/_data/importable.csv',
+    ], { force: true });
+    cy.get('.overlay').first().should('be.visible').should('contain', 'Cannot mix .eln and .csv files.');
+    cy.get('#importOptionsDiv').should('have.attr', 'hidden');
+  });
 });
