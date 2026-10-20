@@ -95,10 +95,10 @@ if (window.location.pathname === '/profile.php') {
       importOptionsDiv.setAttribute('hidden', 'hidden');
       return;
     }
-    // ensure all selected files are either all .eln or all .csv (mixed types not supported)
-    const isEln = files.every(f => f.name.endsWith('.eln'));
-    const isCsv = files.every(f => f.name.endsWith('.csv'));
-    if (!isEln && !isCsv) {
+    // ensure users do not mix .eln and .csv files
+    const isEln = files.some(f => f.name.endsWith('.eln'));
+    const isCsv = files.some(f => f.name.endsWith('.csv'));
+    if (isEln && isCsv) {
       notify.error('Cannot mix .eln and .csv files.');
       fileNameDiv.classList.add('alert-danger', 'm-2', 'p-2', 'rounded', 'border');
       importOptionsDiv.setAttribute('hidden', 'hidden');
