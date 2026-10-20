@@ -95,17 +95,15 @@ if (window.location.pathname === '/profile.php') {
       importOptionsDiv.setAttribute('hidden', 'hidden');
       return;
     }
-    // ensure users do not mix .eln and .csv files
-    const isEln = files.some(f => f.name.endsWith('.eln'));
-    const isCsv = files.some(f => f.name.endsWith('.csv'));
-    if (isEln && isCsv) {
+    // toggle the eln/csv options depending on file extension, and disallow mixed files
+    const isEln = files[0].name.endsWith('.eln');
+    if (!files.every(f => f.name.endsWith(isEln ? '.eln' : '.csv'))) {
       notify.error('Cannot mix .eln and .csv files.');
       fileNameDiv.classList.add('alert-danger', 'm-2', 'p-2', 'rounded', 'border');
       importOptionsDiv.setAttribute('hidden', 'hidden');
       return;
     }
     importOptionsDiv.removeAttribute('hidden');
-    // toggle the eln/csv options depending on file extension
     document.querySelectorAll('[data-showif="eln"]')
       .forEach((el: HTMLElement) => isEln ? el.removeAttribute('hidden') : el.hidden = true);
     // we want to let the .eln file decide which kind of entry it is by default
