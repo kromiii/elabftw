@@ -80,23 +80,30 @@ if (window.location.pathname === '/profile.php') {
     const attachedFile = document.getElementById('attachedFile') as HTMLElement;
     attachedFile.removeAttribute('hidden');
     const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
     // display the selected file name on screen
-    const fileName = input.files[0]?.name || '';
+    const fileName = files.map(f => f.name).join(', ');
     const fileNameDiv = document.getElementById('fileName');
     fileNameDiv.textContent = fileName;
     // make sure previous error message is removed first
     fileNameDiv.classList.remove('alert-danger', 'm-2', 'p-2', 'rounded', 'border');
     // when the file is selected, validate the file size before showing options or proceeding
     const maxsize = await ApiC.getJson('import').then(json => json.max_filesize);
-    if (input.files[0].size > maxsize) {
+    if (files.some(f => f.size > maxsize)) {
       notify.error('file-too-large');
-      fileNameDiv.classList.add('alert-danger', 'm-2', 'p-2', 'rounded', 'border');
+      fileNameDiv.classList.add('alert-danger', 'p-2', 'rounded', 'border');
+      importOptionsDiv.setAttribute('hidden', 'hidden');
+      return;
+    }
+    // toggle the eln/csv options depending on file extension, and disallow mixed files
+    const isEln = files[0].name.endsWith('.eln');
+    if (!files.every(f => f.name.endsWith(isEln ? '.eln' : '.csv'))) {
+      notify.error('Cannot mix .eln and .csv files.');
+      fileNameDiv.classList.add('alert-danger', 'p-2', 'rounded', 'border');
       importOptionsDiv.setAttribute('hidden', 'hidden');
       return;
     }
     importOptionsDiv.removeAttribute('hidden');
-    // toggle the eln/csv options depending on file extension
-    const isEln = input.files[0].name.endsWith('.eln');
     document.querySelectorAll('[data-showif="eln"]')
       .forEach((el: HTMLElement) => isEln ? el.removeAttribute('hidden') : el.hidden = true);
     // we want to let the .eln file decide which kind of entry it is by default
@@ -145,7 +152,7 @@ if (window.location.pathname === '/profile.php') {
     await populateSelect(categorySelect, `teams/current/${categoryType}`);
   });
 
-  document.getElementById('importFileForm')?.addEventListener('submit', function(event) {
+  document.getElementById('importFileForm')?.addEventListener('submit', async function(event) {
     event.preventDefault();
     // start by making sure the result div is empty
     const resultDiv = document.getElementById('importResultDiv');
@@ -169,21 +176,54 @@ if (window.location.pathname === '/profile.php') {
     if (!formData.get('template')) {
       formData.delete('template');
     }
-    fetch(form.action, {
-      method: 'POST',
-      body: formData,
-    }).then(async response => {
-      if (response.status === 201) {
-        notify.success('file-imported');
-      } else {
-        const error = await response.json();
-        notify.error(error.message);
+    const files = (document.getElementById('importFileInput') as HTMLInputElement).files ?? [];
+    const fileNameDiv = document.getElementById('fileName');
+    fileNameDiv.innerHTML = '';
+    let errorCount = 0;
+    let lastErrorMessage = '';
+    try {
+      // upload files sequentially to avoid PHP post_max_size and timeout limits
+      for (let i = 0; i < files.length; i++) {
+        formData.set('file', files[i]);
+        if (files.length > 1) {
+          submitBtn.textContent = `${i18next.t('please-wait')} (${i + 1}/${files.length})`;
+        }
+        const itemDiv = document.createElement('div');
+        const icon = document.createElement('i');
+        icon.classList.add('fas', 'fa-fw', 'mr-1');
+        itemDiv.appendChild(icon);
+        try {
+          const response = await fetch(form.action, {
+            method: 'POST',
+            body: formData,
+          });
+          if (response.status === 201) {
+            icon.classList.add('fa-check', 'text-success');
+            itemDiv.append(files[i].name);
+          } else {
+            const error = await response.json().catch(() => ({ message: response.statusText }));
+            throw new Error(error.message);
+          }
+        } catch (error: unknown) {
+          errorCount++;
+          lastErrorMessage = error instanceof Error ? error.message : String(error);
+          icon.classList.add('fa-xmark', 'text-danger');
+          itemDiv.append(`${files[i].name}: ${lastErrorMessage}`);
+        }
+        fileNameDiv.appendChild(itemDiv);
       }
-    }).catch(error => {
-      notify.error(`Import error: ${error.message}`);
-    }).finally(() => {
+      if (errorCount === 0) {
+        notify.success('file-imported');
+      } else if (files.length === 1) {
+        notify.error(`Import error: ${lastErrorMessage}`);
+      } else if (errorCount < files.length) {
+        notify.error(`${errorCount}/${files.length} files failed to import.`);
+      } else {
+        notify.error(`All ${files.length} files failed to import.`);
+      }
+    } finally {
       submitBtn.removeAttribute('disabled');
       submitBtn.textContent = originalBtnContent;
-    });
+    }
   });
 }
