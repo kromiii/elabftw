@@ -177,6 +177,10 @@ if (window.location.pathname === '/profile.php') {
       formData.delete('template');
     }
     const files = (document.getElementById('importFileInput') as HTMLInputElement).files ?? [];
+    const fileNameDiv = document.getElementById('fileName');
+    fileNameDiv.innerHTML = '';
+    let errorCount = 0;
+    let lastErrorMessage = '';
     try {
       // upload files sequentially to avoid PHP post_max_size and timeout limits
       for (let i = 0; i < files.length; i++) {
@@ -184,19 +188,39 @@ if (window.location.pathname === '/profile.php') {
         if (files.length > 1) {
           submitBtn.textContent = `${i18next.t('please-wait')} (${i + 1}/${files.length})`;
         }
-        const response = await fetch(form.action, {
-          method: 'POST',
-          body: formData,
-        });
-        if (response.status !== 201) {
-          const error = await response.json().catch(() => ({ message: response.statusText }));
-          throw new Error(error.message);
+        const itemDiv = document.createElement('div');
+        const icon = document.createElement('i');
+        icon.classList.add('fas', 'fa-fw', 'mr-1');
+        itemDiv.appendChild(icon);
+        try {
+          const response = await fetch(form.action, {
+            method: 'POST',
+            body: formData,
+          });
+          if (response.status === 201) {
+            icon.classList.add('fa-check', 'text-success');
+            itemDiv.append(files[i].name);
+          } else {
+            const error = await response.json().catch(() => ({ message: response.statusText }));
+            throw new Error(error.message);
+          }
+        } catch (error: unknown) {
+          errorCount++;
+          lastErrorMessage = error instanceof Error ? error.message : String(error);
+          icon.classList.add('fa-xmark', 'text-danger');
+          itemDiv.append(`${files[i].name}: ${lastErrorMessage}`);
         }
+        fileNameDiv.appendChild(itemDiv);
       }
-      notify.success('file-imported');
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      notify.error(`Import error: ${message}`);
+      if (errorCount === 0) {
+        notify.success('file-imported');
+      } else if (files.length === 1) {
+        notify.error(`Import error: ${lastErrorMessage}`);
+      } else if (errorCount < files.length) {
+        notify.error(`${errorCount}/${files.length} files failed to import.`);
+      } else {
+        notify.error(`All ${files.length} files failed to import.`);
+      }
     } finally {
       submitBtn.removeAttribute('disabled');
       submitBtn.textContent = originalBtnContent;

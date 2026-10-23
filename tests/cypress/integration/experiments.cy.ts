@@ -35,6 +35,25 @@ describe('Import tab on profile page', () => {
     cy.get('#fileName').should('be.visible').and('contain', 'single-experiment.eln').and('contain', 'version-106.eln');
     cy.get('#importFileBtn').should('exist').click();
     cy.get('.overlay').first().should('be.visible').should('contain', 'File imported successfully');
+    cy.get('#fileName').children().should('have.length', 2);
+  });
+
+  it('displays individual status and error reason when importing multiple files', () => {
+    cy.visit('/profile.php?tab=3');
+    cy.get('[data-action="show-file-input"]').should('exist').click();
+    cy.get('#importFileInput').should('exist').selectFile([
+      'tests/_data/invalid-shasum.eln',
+      'tests/_data/single-experiment.eln',
+    ], { force: true });
+    cy.get('#importFileBtn').should('exist').click();
+    cy.get('.overlay-error').should('be.visible').and('contain', '1/2 files failed to import.');
+    cy.get('#fileName').children().should('have.length', 2);
+    cy.get('#fileName').children().eq(0)
+      .should('contain', 'invalid-shasum.eln:')
+      .find('i').should('have.class', 'fa-xmark');
+    cy.get('#fileName').children().eq(1)
+      .should('have.text', 'single-experiment.eln')
+      .find('i').should('have.class', 'fa-check');
   });
 
   it('rejects mixing .eln and .csv files', () => {
