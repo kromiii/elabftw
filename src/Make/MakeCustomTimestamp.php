@@ -12,10 +12,14 @@ declare(strict_types=1);
 
 namespace Elabftw\Make;
 
+use Elabftw\Elabftw\FsTools;
 use Elabftw\Params\Guard;
 use Override;
 
+use function file_get_contents;
+use function file_put_contents;
 use function in_array;
+use function is_readable;
 
 /**
  * RFC3161 timestamping with a custom TSA
@@ -41,7 +45,16 @@ final class MakeCustomTimestamp extends AbstractMakeTrustedTimestamp
     #[Override]
     protected function getChain(): string
     {
-        return '/etc/ssl/cert.pem';
+        $customChain = $this->configArr['ts_cert'] ?? '';
+        if ($customChain === '') {
+            return '/etc/ssl/cert.pem';
+        }
+        // a custom CA chain is configured: combine it with the system bundle so both
+        // private and public roots can be trusted, and save it in cache for openssl
+        $systemBundle = is_readable('/etc/ssl/cert.pem') ? file_get_contents('/etc/ssl/cert.pem') : '';
+        $chainPath = FsTools::getCacheFolder('elab') . '/custom-tsa-chain.pem';
+        file_put_contents($chainPath, $systemBundle . "\n" . $customChain);
+        return $chainPath;
     }
 
     #[Override]
