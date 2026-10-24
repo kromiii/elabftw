@@ -22,10 +22,19 @@ use Elabftw\Traits\ProcessTrait;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\RequestException;
 use League\Flysystem\FilesystemOperator;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 
+use function hash_algos;
+use function hash_equals;
+use function hash_file;
+use function in_array;
 use function is_readable;
 use function basename;
 use function file_get_contents;
+use function preg_match;
+use function sprintf;
+use function str_contains;
+use function strtolower;
 
 /**
  * Trusted Timestamping (RFC3161) utility class
@@ -147,7 +156,7 @@ class TimestampUtils
             return false;
         }
 
-        $this->runProcess(array(
+        $args = array(
             'openssl',
             'ts',
             '-verify',
@@ -159,9 +168,81 @@ class TimestampUtils
             $this->tsResponse->tokenPath,
             '-CAfile',
             $this->tsConfig['ts_chain'],
-            '-untrusted',
-            $this->tsConfig['ts_cert'],
-        ));
+        );
+        // only add the untrusted certs argument if we have one (custom TSA doesn't provide it)
+        // otherwise openssl fails with "Could not open file or uri for loading certificates of extra untrusted certs"
+        if ($this->tsConfig['ts_cert'] !== '') {
+            $args[] = '-untrusted';
+            $args[] = $this->tsConfig['ts_cert'];
+        }
+        try {
+            $this->runProcess($args);
+        } catch (ProcessFailedException $e) {
+            // Some TSAs emit tokens with an ESS signingCertificate attribute that does not
+            // match the certificates of their chain, making the strict ESS cross-check of
+            // openssl fail. Fall back to a manual verification (chain, signature, imprint)
+            // which skips this ESS cross-check only.
+            if (!str_contains($e->getMessage(), 'ess cert id')) {
+                throw $e;
+            }
+            $this->verifyTokenManually();
+        }
         return true;
+    }
+
+    /**
+     * Verify the timestamp token without the ESS signingCertificate cross-check:
+     * verify the CMS signature and signer certificate chain, and that the
+     * message imprint in the token matches the timestamped data
+     */
+    private function verifyTokenManually(): void
+    {
+        // extract the CMS token from the timestamp response
+        $cmsPath = FsTools::getCacheFile();
+        $this->trash[] = basename($cmsPath);
+        $this->runProcess(array('openssl', 'ts', '-reply', '-in', $this->tsResponse->tokenPath, '-token_out', '-out', $cmsPath));
+        // verify the signature and the certificate chain of the signer
+        // note: openssl cms has no -untrusted option, intermediate certs must be in the CAfile
+        $tstInfoPath = FsTools::getCacheFile();
+        $this->trash[] = basename($tstInfoPath);
+        $this->runProcess(array(
+            'openssl',
+            'cms',
+            '-verify',
+            '-inform',
+            'DER',
+            '-in',
+            $cmsPath,
+            // TSA signing certs have an EKU limited to timeStamping
+            '-purpose',
+            'timestampsign',
+            // skip cert validity check, as for the main verification
+            '-no_check_time',
+            '-CAfile',
+            $this->tsConfig['ts_chain'],
+            '-out',
+            $tstInfoPath,
+        ));
+        $this->verifyImprint($tstInfoPath);
+    }
+
+    /**
+     * Check that the message imprint found in the TSTInfo matches the hash of the data
+     */
+    private function verifyImprint(string $tstInfoPath): void
+    {
+        $tstInfo = $this->runProcess(array('openssl', 'asn1parse', '-inform', 'DER', '-in', $tstInfoPath));
+        // the TSTInfo structure holds the message imprint as first OCTET STRING,
+        // and its hash algorithm in the SEQUENCE just before it
+        if (!preg_match('/OBJECT\s+:([a-zA-Z0-9-]+)\s*\n\s*\d+:d=\d+\s+hl=\d+\s+l=\s*\d+\s+prim:\s+NULL\s*\n\s*\d+:d=\d+\s+hl=\d+\s+l=\s*\d+\s+prim:\s+OCTET STRING\s+\[HEX DUMP\]:([0-9A-F]+)/', $tstInfo, $matches)) {
+            throw new ImproperActionException('Could not extract message imprint from timestamp token.');
+        }
+        $algo = strtolower($matches[1]);
+        if (!in_array($algo, hash_algos(), true)) {
+            throw new ImproperActionException(sprintf('Unsupported hash algorithm in timestamp token: %s', $algo));
+        }
+        if (!hash_equals(strtolower($matches[2]), hash_file($algo, $this->tsResponse->dataPath))) {
+            throw new ImproperActionException('The message imprint of the timestamp token does not match the data.');
+        }
     }
 }

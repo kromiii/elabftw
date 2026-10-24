@@ -77,7 +77,7 @@ class MakeTimestampTest extends \PHPUnit\Framework\TestCase
             'ts_login' => '',
             'ts_password' => 'fakepassword',
             'ts_url' => 'https://ts.example.com',
-            'ts_cert' => 'dummy.crt',
+            'ts_cert' => '',
             'ts_hash' => 'sha1337',
         );
         $Maker = new MakeCustomTimestamp(
@@ -86,7 +86,37 @@ class MakeTimestampTest extends \PHPUnit\Framework\TestCase
             $configArr,
             $this->dataFormat,
         );
-        $this->assertIsArray($Maker->getTimestampParameters());
+        $params = $Maker->getTimestampParameters();
+        $this->assertIsArray($params);
+        // without a custom chain, the system bundle is used
+        $this->assertSame('/etc/ssl/cert.pem', $params['ts_chain']);
+    }
+
+    public function testCustomTimestampWithChain(): void
+    {
+        $configArr = array(
+            'proxy' => '',
+            'ts_limit' => '0',
+            'ts_login' => '',
+            'ts_password' => '',
+            'ts_url' => 'https://ts.example.com',
+            'ts_cert' => "-----BEGIN CERTIFICATE-----\ndummy\n-----END CERTIFICATE-----",
+            'ts_hash' => 'sha256',
+        );
+        $Maker = new MakeCustomTimestamp(
+            new Users(1, 1),
+            $this->getFreshExperiment(),
+            $configArr,
+            $this->dataFormat,
+        );
+        $params = $Maker->getTimestampParameters();
+        $this->assertIsArray($params);
+        // a custom chain is written to a readable file for openssl
+        $this->assertNotSame('/etc/ssl/cert.pem', $params['ts_chain']);
+        $this->assertFileIsReadable($params['ts_chain']);
+        $chainContent = file_get_contents($params['ts_chain']);
+        $this->assertIsString($chainContent);
+        $this->assertStringContainsString('dummy', $chainContent);
     }
 
     public function testDfnTimestamp(): void
