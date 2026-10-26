@@ -40,7 +40,7 @@ eLabFTW will pick up the type of each entry through its [genre](https://schema.o
 
 Head to the "Import" tab of your Profile page by selecting "Import" from the top right menu.
 
-Select a `.eln` file to display import options. Then click Import.
+Select one or more `.eln` files to display import options. Then click Import.
 
 ### Importing through CLI
 
